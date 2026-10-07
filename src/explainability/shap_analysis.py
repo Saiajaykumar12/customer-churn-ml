@@ -1,9 +1,9 @@
 from pathlib import Path
 
+import joblib
 import matplotlib.pyplot as plt
 import pandas as pd
 import shap
-import joblib
 
 
 MODEL_PATH = Path("models/final_model.joblib")
@@ -12,8 +12,7 @@ MODEL_PATH = Path("models/final_model.joblib")
 def main():
     if not MODEL_PATH.exists():
         raise FileNotFoundError(
-            f"Final model not found: {MODEL_PATH}\n"
-            "The model must be saved before SHAP analysis."
+            f"Final model not found: {MODEL_PATH}"
         )
 
     model = joblib.load(MODEL_PATH)
@@ -29,7 +28,6 @@ def main():
 
     X = df.drop(columns=["Churn"])
 
-    # Transform the data using the fitted preprocessing pipeline
     preprocessor = model.named_steps["preprocessor"]
     classifier = model.named_steps["classifier"]
 
@@ -47,21 +45,14 @@ def main():
     print("Model:", type(classifier).__name__)
     print("Features:", X_transformed_df.shape[1])
 
-    # Create SHAP explainer
-    if hasattr(classifier, "predict_proba"):
-        explainer = shap.Explainer(
-            classifier,
-            X_transformed_df,
-        )
-    else:
-        explainer = shap.Explainer(
-            classifier,
-            X_transformed_df,
-        )
+    # Explicit TreeExplainer for XGBoost
+    explainer = shap.TreeExplainer(
+        classifier,
+        feature_perturbation="tree_path_dependent",
+    )
 
-    shap_values = explainer(X_transformed_df)
+    shap_values = explainer.shap_values(X_transformed_df)
 
-    # Create output directory
     output_dir = Path("models/shap")
     output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -70,8 +61,10 @@ def main():
 
     plt.figure()
 
-    shap.plots.bar(
+    shap.summary_plot(
         shap_values,
+        X_transformed_df,
+        plot_type="bar",
         max_display=20,
         show=False,
     )
@@ -90,13 +83,14 @@ def main():
 
     print(f"Saved: {global_path}")
 
-    # SHAP beeswarm plot
+    # SHAP summary / beeswarm plot
     print("Generating SHAP summary plot...")
 
     plt.figure()
 
-    shap.plots.beeswarm(
+    shap.summary_plot(
         shap_values,
+        X_transformed_df,
         max_display=20,
         show=False,
     )
